@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Streaming Pipeline Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+ 
+  body {
+    background: #060a0f;
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+ 
+  /* animated grid */
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(20,31,46,0.55) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20,31,46,0.55) 1px, transparent 1px);
+    background-size: 44px 44px;
+    animation: grid-move 18s linear infinite;
+    pointer-events:none; z-index:0;
+  }
+  @keyframes grid-move { to { background-position: 0 44px; } }
+ 
+  /* radial accent */
+  body::after {
+    content:'';
+    position:fixed; inset:0;
+    background: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(0,229,255,0.06) 0%, transparent 70%);
+    pointer-events:none; z-index:0;
+  }
+ 
+  .container {
+    position: relative;
+    z-index: 1;
+    padding: 32px 24px 40px;
+    width: 100%;
+    max-width: 1060px;
+  }
+ 
+  /* title */
+  .diagram-title {
+    text-align: center;
+    font-size: 13px;
+    letter-spacing: 5px;
+    color: #2a4a60;
+    margin-bottom: 28px;
+    text-transform: uppercase;
+  }
+  .diagram-title span { color: #00e5ff; }
+ 
+  /* main SVG wrapper */
+  #pipeline-wrap {
+    background: rgba(10,15,23,0.7);
+    border: 1px solid #141f2e;
+    border-radius: 6px;
+    padding: 28px 20px 32px;
+    overflow: visible;
+  }
+ 
+  #pipeline-svg {
+    width: 100%;
+    display: block;
+    overflow: visible;
+  }
+ 
+  /* node hover */
+  .nd { cursor: pointer; }
+  .nd:hover .nd-rect { filter: brightness(1.4); }
+  .nd.sel  .nd-rect  { filter: brightness(1.6); }
+ 
+  /* animated dash edges */
+  @keyframes dash {
+    to { stroke-dashoffset: -52; }
+  }
+  .edge {
+    fill: none;
+    stroke: #1a3a52;
+    stroke-width: 2;
+    stroke-dasharray: 9 5;
+    stroke-linecap: round;
+    animation: dash 2.2s linear infinite;
+  }
+  .edge.e-fast  { animation-duration: 1.3s; }
+  .edge.e-slow  { animation-duration: 3.6s; }
+  .edge.e-med   { animation-duration: 2.2s; }
+ 
+  .edge.hi {
+    stroke: #00e5ff !important;
+    stroke-width: 2.8 !important;
+    filter: drop-shadow(0 0 5px rgba(0,229,255,0.7));
+  }
+ 
+  /* tooltip */
+  #tip {
+    margin-top: 18px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #445a6a;
+    padding: 10px 16px;
+    border: 1px solid #141f2e;
+    border-radius: 4px;
+    background: rgba(6,10,15,0.8);
+    min-height: 34px;
+    text-align: center;
+    transition: color 0.3s;
+  }
+  #tip strong { color: #f7931a; margin-right: 8px; }
+ 
+  /* scan-lines */
+  .scan {
+    position:fixed; inset:0; pointer-events:none; z-index:999;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.035) 2px, rgba(0,0,0,0.035) 4px
+    );
+  }
+</style>
+</head>
+<body>
+<div class="scan"></div>
+<div class="container">
+  <div class="diagram-title">ARQUITECTURA DEL PIPELINE — <span>ANÁLISIS &amp; EVENTOS STREAMING</span></div>
+ 
+  <div id="pipeline-wrap">
+    <!--
+      LAYOUT (viewBox 980 × 520):
+ 
+      ROW 1 — INGESTION   (y centre = 90)
+        Kraken(80)  → WS Client(240) → Queue(400) → TCP Socket(560)
+ 
+      ROW 2 — PROCESSING  (y centre = 250)
+        TCP Socket ↓ → Stream Reader(720) → Batch(560) → Writer(400)
+ 
+      ROW 3 — SERVING     (y centre = 410)
+        Writer ↓ → SQLite(240) → Flask(400) → Frontend(600)
+ 
+      All horizontal gaps = 160px between centres.
+      Node width = 130px, height = 80px.
+      Vertical connectors are straight lines between rows.
+    -->
+    <svg id="pipeline-svg" viewBox="0 0 980 520" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="ah" viewBox="0 0 12 12" refX="10" refY="6"
+                markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M2 2L10 6L2 10" fill="none" stroke="#1a3a52"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+        <marker id="ah-hi" viewBox="0 0 12 12" refX="10" refY="6"
+                markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M2 2L10 6L2 10" fill="none" stroke="#00e5ff"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+ 
+        <!-- glow filter -->
+        <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+ 
+      <!-- ═══ LANE BACKGROUNDS ═══ -->
+ 
+      <!-- INGESTION lane -->
+      <rect x="30" y="30" width="650" height="120" rx="6"
+            fill="rgba(0,229,255,0.025)" stroke="rgba(0,229,255,0.08)"
+            stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="44" y="24" font-size="9" fill="#1a3a52" letter-spacing="2">INGESTION LAYER</text>
+ 
+      <!-- PROCESSING lane -->
+      <rect x="30" y="190" width="830" height="120" rx="6"
+            fill="rgba(0,255,136,0.025)" stroke="rgba(0,255,136,0.08)"
+            stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="44" y="184" font-size="9" fill="#1a3a52" letter-spacing="2">SPARK PROCESSING LAYER</text>
+ 
+      <!-- SERVING lane -->
+      <rect x="30" y="350" width="830" height="130" rx="6"
+            fill="rgba(247,147,26,0.025)" stroke="rgba(247,147,26,0.08)"
+            stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="44" y="344" font-size="9" fill="#1a3a52" letter-spacing="2">SERVING LAYER</text>
+ 
+      <!-- ═══ EDGES ═══
+           Naming: from-to, ids used for highlight
+           Node centres:
+             Row1: Kraken=145,90  WS=305,90  Queue=465,90  TCP=625,90
+             Row2: Reader=785,250  Batch=625,250  Writer=465,250
+             Row3: SQLite=305,415  Flask=465,415  Frontend=670,415
+ 
+           Node boxes: cx-65 .. cx+65, cy-40 .. cy+40
+      -->
+ 
+      <!-- Row 1 horizontal -->
+      <line id="e1" class="edge e-fast" marker-end="url(#ah)"
+            x1="210" y1="90" x2="240" y2="90"/>
+      <line id="e2" class="edge e-fast" marker-end="url(#ah)"
+            x1="370" y1="90" x2="400" y2="90"/>
+      <line id="e3" class="edge e-med"  marker-end="url(#ah)"
+            x1="530" y1="90" x2="560" y2="90"/>
+ 
+      <!-- TCP → Reader: right then down -->
+      <path id="e4" class="edge e-med" marker-end="url(#ah)"
+            d="M 690,90 L 785,90 L 785,210"/>
+ 
+      <!-- Row 2: right to left (Reader→Batch→Writer) -->
+      <line id="e5" class="edge e-med"  marker-end="url(#ah)"
+            x1="720" y1="250" x2="690" y2="250"/>
+      <line id="e6" class="edge e-med"  marker-end="url(#ah)"
+            x1="560" y1="250" x2="530" y2="250"/>
+ 
+      <!-- Writer → SQLite: down then left -->
+      <path id="e7" class="edge e-slow" marker-end="url(#ah)"
+            d="M 465,290 L 465,360 L 370,360 L 370,375"/>
+ 
+      <!-- SQLite → Flask: right -->
+      <line id="e8" class="edge e-med"  marker-end="url(#ah)"
+            x1="370" y1="415" x2="400" y2="415"/>
+ 
+      <!-- Flask → Frontend: right + up curve -->
+      <path id="e9" class="edge e-fast" marker-end="url(#ah)"
+            d="M 530,415 L 605,415"/>
+ 
+      <!-- Frontend → Flask (return poll, dashed lighter) -->
+      <path id="e10" class="edge e-slow" marker-end="url(#ah)"
+            d="M 605,400 L 530,400"/>
+ 
+      <!-- ═══ EDGE LABELS ═══ -->
+      <text x="224" y="84"  font-size="8" fill="#1e3050" letter-spacing="1">data</text>
+      <text x="384" y="84"  font-size="8" fill="#1e3050" letter-spacing="1">msgs</text>
+      <text x="514" y="84"  font-size="8" fill="#1e3050" letter-spacing="1">queue</text>
+      <text x="696" y="84"  font-size="8" fill="#1e3050" letter-spacing="1">socket:9999</text>
+      <text x="726" y="244" font-size="8" fill="#1e3050" letter-spacing="1">micro-batch</text>
+      <text x="566" y="244" font-size="8" fill="#1e3050" letter-spacing="1">transform</text>
+      <text x="384" y="380" font-size="8" fill="#1e3050" letter-spacing="1">write</text>
+      <text x="410" y="409" font-size="8" fill="#1e3050" letter-spacing="1">query</text>
+      <text x="542" y="410" font-size="8" fill="#1e3050" letter-spacing="1">response</text>
+      <text x="542" y="396" font-size="8" fill="#1e3050" letter-spacing="1">GET /api</text>
+ 
+      <!-- ═══ PARTICLES ═══ -->
+ 
+      <!-- e1: Kraken→WS -->
+      <circle r="3.5" fill="#00e5ff" filter="url(#glow)">
+        <animateMotion dur="1.0s" repeatCount="indefinite" path="M210,90 L240,90"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.0s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e2: WS→Queue -->
+      <circle r="3.5" fill="#00e5ff" filter="url(#glow)">
+        <animateMotion dur="1.0s" begin="0.2s" repeatCount="indefinite" path="M370,90 L400,90"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.0s" begin="0.2s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e3: Queue→TCP -->
+      <circle r="3" fill="#9f7eff" filter="url(#glow)">
+        <animateMotion dur="1.4s" begin="0.5s" repeatCount="indefinite" path="M530,90 L560,90"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.4s" begin="0.5s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e4: TCP→Reader (L-shape) -->
+      <circle r="3" fill="#9f7eff" filter="url(#glow)">
+        <animateMotion dur="1.8s" begin="0.8s" repeatCount="indefinite"
+                       path="M690,90 L785,90 L785,210"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" begin="0.8s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e5: Reader→Batch -->
+      <circle r="3.5" fill="#00ff88" filter="url(#glow)">
+        <animateMotion dur="1.3s" begin="0.3s" repeatCount="indefinite" path="M720,250 L690,250"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.3s" begin="0.3s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e6: Batch→Writer -->
+      <circle r="3.5" fill="#00ff88" filter="url(#glow)">
+        <animateMotion dur="1.3s" begin="0.6s" repeatCount="indefinite" path="M560,250 L530,250"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.3s" begin="0.6s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e7: Writer→SQLite -->
+      <circle r="3" fill="#f7931a" filter="url(#glow)">
+        <animateMotion dur="2.0s" begin="0.9s" repeatCount="indefinite"
+                       path="M465,290 L465,360 L370,360 L370,375"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="2.0s" begin="0.9s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e8: SQLite→Flask -->
+      <circle r="3.5" fill="#f7931a" filter="url(#glow)">
+        <animateMotion dur="1.5s" begin="0.4s" repeatCount="indefinite" path="M370,415 L400,415"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" begin="0.4s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e9: Flask→Frontend -->
+      <circle r="3.5" fill="#ff3060" filter="url(#glow)">
+        <animateMotion dur="1.2s" begin="0.7s" repeatCount="indefinite" path="M530,415 L605,415"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.2s" begin="0.7s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- e10: Frontend→Flask poll -->
+      <circle r="2.5" fill="#ffffff" opacity="0.6" filter="url(#glow)">
+        <animateMotion dur="1.8s" begin="1.1s" repeatCount="indefinite" path="M605,400 L530,400"/>
+        <animate attributeName="opacity" values="0;0.6;0.6;0" dur="1.8s" begin="1.1s" repeatCount="indefinite"/>
+      </circle>
+ 
+      <!-- ═══ NODES ═══ -->
+      <!--
+        Template: cx, cy
+        rect: x=cx-65, y=cy-40, w=130, h=80
+        top bar: x=cx-65, y=cy-40, w=130, h=3
+      -->
+ 
+      <!-- ── ROW 1 ── -->
+ 
+      <!-- Kraken API  cx=145 cy=90 -->
+      <g class="nd" data-key="kraken">
+        <rect class="nd-rect" x="80"  y="50" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="80"  y="50" width="130" height="3" rx="2" fill="#00e5ff"/>
+        <text x="145" y="84"  font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">KRAKEN API</text>
+        <text x="145" y="100" font-size="8.5" fill="#445a6a" text-anchor="middle">Exchange feed</text>
+        <text x="145" y="116" font-size="7.5" fill="#1e3a50" text-anchor="middle">wss://ws.kraken.com</text>
+      </g>
+ 
+      <!-- WS Client  cx=305 cy=90 -->
+      <g class="nd" data-key="ws">
+        <rect class="nd-rect" x="240" y="50" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="240" y="50" width="130" height="3" rx="2" fill="#00e5ff"/>
+        <text x="305" y="84"  font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">WS CLIENT</text>
+        <text x="305" y="100" font-size="8.5" fill="#445a6a" text-anchor="middle">Subscription mgr</text>
+        <text x="305" y="116" font-size="7.5" fill="#1e3a50" text-anchor="middle">ticker · trade</text>
+      </g>
+ 
+      <!-- Queue  cx=465 cy=90 -->
+      <g class="nd" data-key="queue">
+        <rect class="nd-rect" x="400" y="50" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="400" y="50" width="130" height="3" rx="2" fill="#8ba4bf"/>
+        <text x="465" y="84"  font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">QUEUE</text>
+        <text x="465" y="100" font-size="8.5" fill="#445a6a" text-anchor="middle">In-memory buffer</text>
+        <text x="465" y="116" font-size="7.5" fill="#1e3a50" text-anchor="middle">decouples ingestion</text>
+      </g>
+ 
+      <!-- TCP Socket  cx=625 cy=90 -->
+      <g class="nd" data-key="tcp">
+        <rect class="nd-rect" x="560" y="50" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="560" y="50" width="130" height="3" rx="2" fill="#9f7eff"/>
+        <text x="625" y="84"  font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">TCP SOCKET</text>
+        <text x="625" y="100" font-size="8.5" fill="#445a6a" text-anchor="middle">Bridge endpoint</text>
+        <text x="625" y="116" font-size="7.5" fill="#1e3a50" text-anchor="middle">port 9999</text>
+      </g>
+ 
+      <!-- ── ROW 2 (right-to-left) ── -->
+ 
+      <!-- Stream Reader  cx=785 cy=250 -->
+      <g class="nd" data-key="reader">
+        <rect class="nd-rect" x="720" y="210" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="720" y="210" width="130" height="3" rx="2" fill="#00ff88"/>
+        <text x="785" y="244" font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">STREAM READER</text>
+        <text x="785" y="260" font-size="8.5" fill="#445a6a" text-anchor="middle">Spark Structured</text>
+        <text x="785" y="276" font-size="7.5" fill="#1e3a50" text-anchor="middle">micro-batches</text>
+      </g>
+ 
+      <!-- Batch  cx=625 cy=250 -->
+      <g class="nd" data-key="batch">
+        <rect class="nd-rect" x="560" y="210" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="560" y="210" width="130" height="3" rx="2" fill="#00ff88"/>
+        <text x="625" y="244" font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">BATCH</text>
+        <text x="625" y="260" font-size="8.5" fill="#445a6a" text-anchor="middle">Parse &amp; transform</text>
+        <text x="625" y="276" font-size="7.5" fill="#1e3a50" text-anchor="middle">schema validation</text>
+      </g>
+ 
+      <!-- Writer  cx=465 cy=250 -->
+      <g class="nd" data-key="writer">
+        <rect class="nd-rect" x="400" y="210" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="400" y="210" width="130" height="3" rx="2" fill="#00ff88"/>
+        <text x="465" y="244" font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">WRITER</text>
+        <text x="465" y="260" font-size="8.5" fill="#445a6a" text-anchor="middle">Stream output</text>
+        <text x="465" y="276" font-size="7.5" fill="#1e3a50" text-anchor="middle">foreachBatch sink</text>
+      </g>
+ 
+      <!-- ── ROW 3 ── -->
+ 
+      <!-- SQLite  cx=305 cy=415 -->
+      <g class="nd" data-key="sqlite">
+        <rect class="nd-rect" x="240" y="375" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="240" y="375" width="130" height="3" rx="2" fill="#f7931a"/>
+        <text x="305" y="409" font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">SQLITE3</text>
+        <text x="305" y="425" font-size="8.5" fill="#445a6a" text-anchor="middle">Market data store</text>
+        <text x="305" y="441" font-size="7.5" fill="#1e3a50" text-anchor="middle">ticks · history</text>
+      </g>
+ 
+      <!-- Flask  cx=465 cy=415 -->
+      <g class="nd" data-key="flask">
+        <rect class="nd-rect" x="400" y="375" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#1e3a50" stroke-width="1.2"/>
+        <rect x="400" y="375" width="130" height="3" rx="2" fill="#ff3060"/>
+        <text x="465" y="409" font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">FLASK API</text>
+        <text x="465" y="425" font-size="8.5" fill="#445a6a" text-anchor="middle">REST endpoints</text>
+        <text x="465" y="441" font-size="7.5" fill="#1e3a50" text-anchor="middle">port 5000</text>
+      </g>
+ 
+      <!-- Frontend  cx=670 cy=415 -->
+      <g class="nd" data-key="frontend">
+        <rect class="nd-rect" x="605" y="375" width="130" height="80" rx="4"
+              fill="#0a0f17" stroke="#2a3a4a" stroke-width="1.2"/>
+        <rect x="605" y="375" width="130" height="3" rx="2" fill="#ffffff"/>
+        <text x="670" y="409" font-size="11" fill="#c8d8e8" text-anchor="middle" letter-spacing="1">FRONTEND</text>
+        <text x="670" y="425" font-size="8.5" fill="#445a6a" text-anchor="middle">Browser dashboard</text>
+        <text x="670" y="441" font-size="7.5" fill="#1e3a50" text-anchor="middle">poll each 2s</text>
+      </g>
+ 
+      <!-- ═══ PULSE RINGS (shown on click) ═══ -->
+      <circle id="pr-kraken"   cx="145" cy="90"  r="0" fill="none" stroke="#00e5ff" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-ws"       cx="305" cy="90"  r="0" fill="none" stroke="#00e5ff" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-queue"    cx="465" cy="90"  r="0" fill="none" stroke="#8ba4bf" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-tcp"      cx="625" cy="90"  r="0" fill="none" stroke="#9f7eff" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-reader"   cx="785" cy="250" r="0" fill="none" stroke="#00ff88" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-batch"    cx="625" cy="250" r="0" fill="none" stroke="#00ff88" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-writer"   cx="465" cy="250" r="0" fill="none" stroke="#00ff88" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-sqlite"   cx="305" cy="415" r="0" fill="none" stroke="#f7931a" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-flask"    cx="465" cy="415" r="0" fill="none" stroke="#ff3060" stroke-width="1.2" opacity="0"/>
+      <circle id="pr-frontend" cx="670" cy="415" r="0" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0"/>
+    </svg>
+ 
+    <div id="tip">
+      <strong>PIPELINE</strong>Click en cualquier nodo para ver su descripción.
+    </div>
+  </div>
+</div>
+ 
+<style>
+@keyframes pulse-ring {
+  0%   { r:6;  opacity:0.8; }
+  100% { r:60; opacity:0;   }
+}
+</style>
+ 
+<script>
+const INFO = {
+  kraken:   { label:'KRAKEN API',      col:'#00e5ff', desc:'Feed externo del exchange. Kraken empuja datos BTC/USD en tiempo real vía WebSocket. Produce ticks de precio, bid, ask y volumen.' },
+  ws:       { label:'WS CLIENT',       col:'#00e5ff', desc:'Mantiene la suscripción activa a Kraken y normaliza los mensajes entrantes de tipo ticker y trade antes de encolarlo.' },
+  queue:    { label:'QUEUE',           col:'#8ba4bf', desc:'Buffer en memoria que desacopla la ingesta WebSocket del transporte TCP. Absorbe bursts sin pérdida de mensajes.' },
+  tcp:      { label:'TCP SOCKET',      col:'#9f7eff', desc:'Endpoint puente en el puerto 9999. Es la fuente de datos que consume Spark Structured Streaming para iniciar el pipeline.' },
+  reader:   { label:'STREAM READER',   col:'#00ff88', desc:'Lee el socket TCP en micro-batches continuos usando readStream.format("socket"). Punto de entrada al cluster Spark.' },
+  batch:    { label:'BATCH PROCESSOR', col:'#00ff88', desc:'Por cada micro-batch: parseo JSON, validación de schema, cálculo de métricas derivadas (spread, VWAP, change%) y tipado de columnas.' },
+  writer:   { label:'WRITER',          col:'#00ff88', desc:'Escribe el output procesado en SQLite usando foreachBatch sink. Maneja checkpointing para garantizar exactamente una escritura por registro.' },
+  sqlite:   { label:'SQLITE3',         col:'#f7931a', desc:'Base de datos liviana que almacena el tick más reciente y el historial de precios. Sirve como fuente de verdad para la API REST.' },
+  flask:    { label:'FLASK API',       col:'#ff3060', desc:'Servidor HTTP en el puerto 5000. Expone GET /api/latest que el frontend consulta cada 2 segundos para obtener el estado actual del mercado.' },
+  frontend: { label:'FRONTEND',        col:'#ffffff', desc:'Dashboard en el browser. Hace polling a Flask cada 2s, renderiza precio en tiempo real, sparkline, bid/ask, spread y todos los stats.' },
+};
+ 
+// edges connected to each node
+const EDGES = {
+  kraken:   ['e1'],
+  ws:       ['e1','e2'],
+  queue:    ['e2','e3'],
+  tcp:      ['e3','e4'],
+  reader:   ['e4','e5'],
+  batch:    ['e5','e6'],
+  writer:   ['e6','e7'],
+  sqlite:   ['e7','e8'],
+  flask:    ['e8','e9','e10'],
+  frontend: ['e9','e10'],
+};
+ 
+let active = null;
+ 
+function resetAll() {
+  document.querySelectorAll('.edge').forEach(e => {
+    e.classList.remove('hi');
+    e.setAttribute('marker-end','url(#ah)');
+  });
+  document.querySelectorAll('[id^="pr-"]').forEach(c => {
+    c.style.animation = 'none';
+    c.setAttribute('opacity','0');
+    c.setAttribute('r','0');
+  });
+  document.querySelectorAll('.nd').forEach(g => g.classList.remove('sel'));
+}
+ 
+function activate(key) {
+  resetAll();
+  if (!key) {
+    document.getElementById('tip').innerHTML =
+      '<strong>PIPELINE</strong>Click en cualquier nodo para ver su descripción.';
+    return;
+  }
+ 
+  const info = INFO[key];
+  document.getElementById('tip').innerHTML =
+    `<strong>${info.label}</strong>${info.desc}`;
+ 
+  // highlight edges
+  (EDGES[key]||[]).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('hi'); el.setAttribute('marker-end','url(#ah-hi)'); }
+  });
+ 
+  // pulse ring
+  const ring = document.getElementById('pr-'+key);
+  if (ring) {
+    ring.setAttribute('opacity','0.7');
+    ring.style.animation = 'pulse-ring 1.6s ease-out infinite';
+  }
+ 
+  document.querySelector(`.nd[data-key="${key}"]`)?.classList.add('sel');
+}
+ 
+document.querySelectorAll('.nd').forEach(g => {
+  const key = g.getAttribute('data-key');
+  g.addEventListener('click', e => {
+    e.stopPropagation();
+    active = (active === key) ? null : key;
+    activate(active);
+  });
+  g.addEventListener('mouseenter', () => { if (!active) activate(key); });
+  g.addEventListener('mouseleave', () => { if (!active) activate(null); });
+});
+</script>
+</body>
+</html>

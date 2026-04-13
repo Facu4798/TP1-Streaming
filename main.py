@@ -246,7 +246,7 @@ query.writeStream.format("console")\
     .option("spark.sql.streaming.checkpointLocation", "/tmp/checkpoint")\
     .foreachBatch(process_batch)\
     .trigger(processingTime="5 seconds")\
-    .start().awaitTermination()
+    .start()
 
 
 
