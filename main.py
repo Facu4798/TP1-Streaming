@@ -13,7 +13,7 @@ os.system("clear")
 os.system("pip install -q pyspark")
 
 # install mysql driver for python
-os.system("pip install -q sqlalchemy pymysql")
+os.system("pip install -q sqlalchemy pymysql flask flask-cors")
 
 # install jdk 17
 os.system("sudo apt-get update -qq")
@@ -39,56 +39,15 @@ import queue
 import socket
 import json
 import pandas as pd
+import sqlite3
 
-
-#######################
-##### MySQL setup #####
-#######################
-
-
-# Install MySQL server
-import os
-
-# Install MySQL server
-os.system("sudo apt-get update -y")
-os.system("sudo apt-get install -y mysql-server")
-os.system("sudo systemctl start mysql")
-
-# Install Python libraries
-os.system("pip install mysql-connector-python pandas sqlalchemy pymysql")
-
-
-# Remove --skip-grant-tables from MySQL config if present
-os.system("sudo sed -i 's/^skip-grant-tables//' /etc/mysql/mysql.conf.d/mysqld.cnf")
-os.system("sudo sed -i 's/^skip_grant_tables//' /etc/mysql/mysql.conf.d/mysqld.cnf")
-
-# Stop any running instance, then start clean
-os.system("sudo service mysql stop")
-os.system("sudo service mysql start")
-
-# Give MySQL a moment to finish starting
-import time
-import mysql.connector
-time.sleep(3)
-
-# Create DB, user, grant privileges
-sql = """
-CREATE DATABASE IF NOT EXISTS crypto;
-CREATE USER IF NOT EXISTS 'admin_user'@'localhost' IDENTIFIED BY 'StrongPassword123!';
-GRANT ALL PRIVILEGES ON crypto.* TO 'admin_user'@'localhost';
-FLUSH PRIVILEGES;
-"""
-
-with open("/tmp/setup.sql", "w") as f:
-    f.write(sql)
-
-os.system("sudo mysql < /tmp/setup.sql")
-os.system("rm /tmp/setup.sql")
-print("Database and user created.")
-
-
-
-
+# initiate the sqlite database and delete the data if exists
+connection = sqlite3.connect("data.db")
+cursor = connection.cursor()
+cursor.execute("DROP TABLE IF EXISTS crypto_data;")
+connection.commit()
+cursor.close()
+connection.close()
 
 
 
@@ -163,9 +122,7 @@ def crypto_websocket():
 
 
 
-##############################
-##### start reading data #####
-##############################
+
 
 
 
@@ -180,6 +137,61 @@ websocket_thread = threading.Thread(target=crypto_websocket, daemon=True)
 websocket_thread.start()
 print("TCP server and websocket connection started in separate threads.")
 print("\n\n")
+
+
+#####################
+##### Start API #####
+#####################
+
+import sqlite3
+import threading
+from flask import Flask, jsonify, send_from_directory
+
+app = Flask(__name__)
+
+
+# ── Routes ──────────────────────────────────────────────
+@app.route("/")
+def index():
+    return send_from_directory(".", "main.html")
+
+
+@app.route("/api/data")
+def get_data():
+    conn = sqlite3.connect("data.db")
+    conn.row_factory = sqlite3.Row  # makes rows behave like dicts
+    rows = conn.execute(
+        "SELECT * FROM crypto_data ORDER BY timestamp DESC LIMIT 100"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
+
+@app.route("/api/latest")
+def get_latest():
+    conn = sqlite3.connect("data.db")
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT * FROM crypto_data ORDER BY timestamp DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(row) if row else {})
+
+# ── Thread launcher ──────────────────────────────────────
+
+def run_api():
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+
+def start_api_thread():
+    t = threading.Thread(target=run_api, daemon=True)
+    t.start()
+    print("API running on http://localhost:5000")
+
+start_api_thread()
+
+
+##############################
+##### start reading data #####
+##############################
 
 
 # read the data from the tcp server and print it to the console
@@ -207,23 +219,34 @@ def process_batch(df, epoch_id):
         st.StructField("timestamp", st.StringType())
     ]))).select("json.*")
 
-    pandas_df = df.toPandas()
-    
-    from sqlalchemy import create_engine
-    engine = create_engine("mysql+pymysql://admin_user:StrongPassword123!@127.0.0.1:3306/crypto")
-    pandas_df.to_sql(
-        "ticker", 
-        con=engine, 
-        if_exists="append", 
+    # # write the batch to a csv file
+    # df.toPandas().to_csv(
+    #     "data.csv",
+    #     index=False,
+    #     mode="a",
+    #     header=not os.path.exists("data.csv")
+    # )
+
+    # print(f"Written batch {epoch_id} to CSV file.")
+
+    # write to sqlite
+    conn = sqlite3.connect("data.db")
+    df.toPandas().to_sql(
+        "crypto_data",
+        conn,
+        if_exists="append",
         index=False
     )
+    conn.close()
+    print(f"Written batch {epoch_id} to SQLite database.")
     
-    print(f"Batch {epoch_id} written to MySQL.")
+    
 
 query.writeStream.format("console")\
     .option("spark.sql.streaming.checkpointLocation", "/tmp/checkpoint")\
     .foreachBatch(process_batch)\
     .trigger(processingTime="5 seconds")\
     .start().awaitTermination()
+
 
 

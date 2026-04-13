@@ -13,3 +13,6 @@
     "change_pct": -0.91, --> porcentaje de cambio de precio en las últimas 24 horas
     "timestamp": "2026-04-13T04:15:48.566604Z" --> timestamp del mensaje
 }
+
+subspace password
+@Wasd01928374

@@ -1,5 +1,10 @@
-import os
+#######################
+##### MySQL setup #####
+#######################
 
+
+# Install MySQL server
+import os
 
 # Install MySQL server
 os.system("sudo apt-get update -y")
@@ -37,19 +42,3 @@ with open("/tmp/setup.sql", "w") as f:
 os.system("sudo mysql < /tmp/setup.sql")
 os.system("rm /tmp/setup.sql")
 print("Database and user created.")
-
-# Connect as admin_user
-conn = mysql.connector.connect(
-    host="127.0.0.1",
-    user="admin_user",
-    password="StrongPassword123!",
-    database="crypto"
-)
-cursor = conn.cursor()
-
-cursor.execute("CREATE TABLE IF NOT EXISTS temp (id INT AUTO_INCREMENT PRIMARY KEY, data JSON)")
-conn.commit()
-print("Table created.")
-
-cursor.close()
-conn.close()

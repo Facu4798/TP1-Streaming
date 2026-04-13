@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BTC/USD Live</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #080b10;
+    --surface:   #0d1117;
+    --border:    #1a2233;
+    --accent:    #f7931a;
+    --accent2:   #00e5ff;
+    --green:     #00ff88;
+    --red:       #ff3366;
+    --muted:     #3a4a5c;
+    --text:      #c8d8e8;
+    --dim:       #546a80;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-disp: 'Bebas Neue', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* animated grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(247,147,26,0.08) 0%, transparent 65%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+  }
+
+  .brand { display: flex; align-items: center; gap: 14px; }
+
+  .btc-icon {
+    width: 44px; height: 44px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-disp);
+    font-size: 22px;
+    color: #000;
+    box-shadow: 0 0 24px rgba(247,147,26,0.5);
+    animation: pulse-icon 3s ease-in-out infinite;
+  }
+  @keyframes pulse-icon {
+    0%,100% { box-shadow: 0 0 24px rgba(247,147,26,0.5); }
+    50%      { box-shadow: 0 0 40px rgba(247,147,26,0.9); }
+  }
+
+  .brand-text h1 {
+    font-family: var(--font-disp);
+    font-size: 2rem;
+    letter-spacing: 4px;
+    color: #fff;
+    line-height: 1;
+  }
+  .brand-text span {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--dim);
+    letter-spacing: 2px;
+  }
+
+  .live-badge {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--green);
+    letter-spacing: 2px;
+  }
+  .live-dot {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: blink 1.2s ease-in-out infinite;
+    box-shadow: 0 0 8px var(--green);
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  /* ── Price Hero ── */
+  .price-hero {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 40px 20px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+  .price-hero::before {
+    content: 'BTC';
+    position: absolute;
+    font-family: var(--font-disp);
+    font-size: 14rem;
+    color: rgba(247,147,26,0.04);
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    pointer-events: none;
+    letter-spacing: 10px;
+  }
+
+  .price-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 4px;
+    color: var(--dim);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  #last-price {
+    font-family: var(--font-disp);
+    font-size: clamp(3.5rem, 8vw, 6rem);
+    letter-spacing: 4px;
+    color: #fff;
+    line-height: 1;
+    transition: color 0.4s;
+  }
+
+  #price-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    padding: 6px 18px;
+    border-radius: 2px;
+    transition: all 0.4s;
+  }
+
+  #timestamp {
+    margin-top: 14px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  /* ── Grid ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 22px;
+    position: relative;
+    transition: border-color 0.3s;
+  }
+  .card:hover { border-color: var(--muted); }
+
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .card-value {
+    font-family: var(--font-disp);
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .card-sub {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--dim);
+    margin-top: 6px;
+  }
+
+  .card-accent { border-top: 2px solid var(--accent); }
+  .card-green  { border-top: 2px solid var(--green); }
+  .card-red    { border-top: 2px solid var(--red); }
+  .card-cyan   { border-top: 2px solid var(--accent2); }
+
+  /* bid/ask row */
+  .bid-ask {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  /* ── Sparkline ── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .chart-title {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+  #sparkline {
+    width: 100%;
+    height: 120px;
+    display: block;
+  }
+
+  /* ── Ticker tape ── */
+  .ticker {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    padding: 10px 0;
+    position: relative;
+  }
+  .ticker::before, .ticker::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 60px;
+    z-index: 2;
+  }
+  .ticker::before { left: 0;  background: linear-gradient(90deg, var(--surface), transparent); }
+  .ticker::after  { right: 0; background: linear-gradient(-90deg, var(--surface), transparent); }
+
+  #ticker-inner {
+    display: flex;
+    gap: 40px;
+    animation: scroll-left 18s linear infinite;
+    width: max-content;
+    padding: 0 20px;
+  }
+  @keyframes scroll-left { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  .ticker-item {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--dim);
+    white-space: nowrap;
+    display: flex; gap: 8px;
+  }
+  .ticker-item .tk-label { color: var(--accent); }
+  .ticker-item .tk-val   { color: var(--text); }
+
+  /* ── Flash animation ── */
+  @keyframes flash-green { 0%,100%{background:transparent} 50%{background:rgba(0,255,136,0.08)} }
+  @keyframes flash-red   { 0%,100%{background:transparent} 50%{background:rgba(255,51,102,0.08)} }
+  .flash-green { animation: flash-green 0.5s ease; }
+  .flash-red   { animation: flash-red   0.5s ease; }
+
+  /* ── Status bar ── */
+  .status-bar {
+    margin-top: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  .up   { color: var(--green); }
+  .down { color: var(--red); }
+
+  @media (max-width: 700px) {
+    .grid   { grid-template-columns: 1fr 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .bid-ask { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="btc-icon">₿</div>
+      <div class="brand-text">
+        <h1>BTC / USD</h1>
+        <span>LIVE MARKET DATA</span>
+      </div>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      STREAMING
+    </div>
+  </header>
+
+  <!-- Price Hero -->
+  <div class="price-hero" id="price-hero">
+    <div class="price-label">LAST PRICE</div>
+    <div id="last-price">——————</div>
+    <div id="price-change">——</div>
+    <div id="timestamp">——</div>
+  </div>
+
+  <!-- Sparkline -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <span class="chart-title">PRICE HISTORY (last 60 ticks)</span>
+      <span id="spark-range" style="font-family:var(--font-mono);font-size:0.65rem;color:var(--dim);">——</span>
+    </div>
+    <canvas id="sparkline"></canvas>
+  </div>
+
+  <!-- Top stats -->
+  <div class="grid">
+    <div class="card card-green">
+      <div class="card-label">24H HIGH</div>
+      <div class="card-value" id="high">——</div>
+    </div>
+    <div class="card card-red">
+      <div class="card-label">24H LOW</div>
+      <div class="card-value" id="low">——</div>
+    </div>
+    <div class="card card-cyan">
+      <div class="card-label">VWAP</div>
+      <div class="card-value" id="vwap">——</div>
+    </div>
+  </div>
+
+  <!-- Bid / Ask -->
+  <div class="bid-ask">
+    <div class="card card-green">
+      <div class="card-label">BID</div>
+      <div class="card-value" id="bid">——</div>
+      <div class="card-sub" id="bid-qty">qty: ——</div>
+    </div>
+    <div class="card card-red">
+      <div class="card-label">ASK</div>
+      <div class="card-value" id="ask">——</div>
+      <div class="card-sub" id="ask-qty">qty: ——</div>
+    </div>
+  </div>
+
+  <!-- Volume + Spread -->
+  <div class="grid-2">
+    <div class="card card-accent">
+      <div class="card-label">24H VOLUME (BTC)</div>
+      <div class="card-value" id="volume">——</div>
+    </div>
+    <div class="card">
+      <div class="card-label">SPREAD</div>
+      <div class="card-value" id="spread">——</div>
+      <div class="card-sub" id="spread-pct">——</div>
+    </div>
+  </div>
+
+  <!-- Ticker tape -->
+  <div class="ticker">
+    <div id="ticker-inner">
+      <!-- filled by JS, duplicated for seamless loop -->
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <span>SPARK → SQLITE → FLASK → BROWSER</span>
+    <span id="update-count">UPDATES: 0</span>
+    <span id="last-update">LAST POLL: ——</span>
+  </div>
+
+</div>
+
+<script>
+const API = '/api/latest';
+const POLL_MS = 2000;
+
+let priceHistory = [];
+let updateCount  = 0;
+let prevPrice    = null;
+
+// ── Helpers ──────────────────────────────────────────────
+
+const fmt  = (n, d=2) => n != null ? Number(n).toLocaleString('en-US', {minimumFractionDigits:d, maximumFractionDigits:d}) : '——';
+const fmtK = (n)      => n != null ? Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:5}) : '——';
+
+function el(id) { return document.getElementById(id); }
+
+function flash(id, cls) {
+  const e = el(id);
+  e.classList.remove('flash-green','flash-red');
+  void e.offsetWidth; // reflow
+  e.classList.add(cls);
+}
+
+// ── Sparkline (pure canvas) ───────────────────────────────
+
+function drawSparkline(prices) {
+  const canvas = el('sparkline');
+  const ctx    = canvas.getContext('2d');
+  const dpr    = window.devicePixelRatio || 1;
+  const W      = canvas.clientWidth;
+  const H      = canvas.clientHeight;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  if (prices.length < 2) return;
+
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const pad = { t:10, b:24, l:10, r:10 };
+  const iW  = W - pad.l - pad.r;
+  const iH  = H - pad.t - pad.b;
+
+  const xOf = i => pad.l + (i / (prices.length - 1)) * iW;
+  const yOf = v => pad.t + iH - ((v - min) / range) * iH;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + iH);
+  grad.addColorStop(0,   'rgba(247,147,26,0.25)');
+  grad.addColorStop(1,   'rgba(247,147,26,0.00)');
+
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), yOf(prices[0]));
+  for (let i = 1; i < prices.length; i++) ctx.lineTo(xOf(i), yOf(prices[i]));
+  ctx.lineTo(xOf(prices.length-1), pad.t + iH);
+  ctx.lineTo(xOf(0), pad.t + iH);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), yOf(prices[0]));
+  for (let i = 1; i < prices.length; i++) ctx.lineTo(xOf(i), yOf(prices[i]));
+  ctx.strokeStyle = '#f7931a';
+  ctx.lineWidth   = 1.5;
+  ctx.lineJoin    = 'round';
+  ctx.stroke();
+
+  // Last dot
+  const lx = xOf(prices.length-1);
+  const ly = yOf(prices[prices.length-1]);
+  ctx.beginPath();
+  ctx.arc(lx, ly, 3.5, 0, Math.PI*2);
+  ctx.fillStyle = '#f7931a';
+  ctx.fill();
+
+  // Range label
+  el('spark-range').textContent = `${fmt(min)} – ${fmt(max)}`;
+
+  // X axis ticks (min / max labels)
+  ctx.fillStyle = 'rgba(84,106,128,0.8)';
+  ctx.font      = '9px Share Tech Mono';
+  ctx.textAlign = 'left';
+  ctx.fillText(fmt(min), pad.l, H - 4);
+  ctx.textAlign = 'right';
+  ctx.fillText(fmt(max), W - pad.r, H - 4);
+}
+
+// ── Ticker tape ───────────────────────────────────────────
+
+function buildTicker(d) {
+  const items = [
+    ['LAST',    fmt(d.last)],
+    ['BID',     fmt(d.bid)],
+    ['ASK',     fmt(d.ask)],
+    ['HIGH',    fmt(d.high)],
+    ['LOW',     fmt(d.low)],
+    ['VWAP',    fmt(d.vwap)],
+    ['VOLUME',  fmtK(d.volume) + ' BTC'],
+    ['CHG%',    (d.change_pct >= 0 ? '+' : '') + fmt(d.change_pct) + '%'],
+    ['SPREAD',  fmt(d.ask - d.bid, 1)],
+  ];
+  const html = items.map(([l,v]) =>
+    `<span class="ticker-item"><span class="tk-label">${l}</span><span class="tk-val">${v}</span></span>`
+  ).join('');
+  // duplicate for seamless loop
+  el('ticker-inner').innerHTML = html + html;
+}
+
+// ── Main update ───────────────────────────────────────────
+
+function update(d) {
+  updateCount++;
+  const price     = d.last;
+  const isUp      = prevPrice === null ? true : price >= prevPrice;
+  const changePos = d.change_pct >= 0;
+
+  // Price hero
+  el('last-price').textContent = '$' + fmt(price);
+  el('last-price').style.color = isUp ? 'var(--green)' : 'var(--red)';
+
+  const pChange  = el('price-change');
+  const sign     = changePos ? '+' : '';
+  pChange.textContent = `${sign}$${fmt(d.change)}  (${sign}${fmt(d.change_pct)}%)`;
+  pChange.style.background   = changePos ? 'rgba(0,255,136,0.08)' : 'rgba(255,51,102,0.08)';
+  pChange.style.color        = changePos ? 'var(--green)'         : 'var(--red)';
+
+  el('timestamp').textContent = new Date(d.timestamp).toUTCString();
+
+  // Flash hero
+  flash('price-hero', isUp ? 'flash-green' : 'flash-red');
+
+  // Stats
+  el('high').textContent   = '$' + fmt(d.high);
+  el('low').textContent    = '$' + fmt(d.low);
+  el('vwap').textContent   = '$' + fmt(d.vwap);
+  el('volume').textContent = fmtK(d.volume);
+
+  // Bid / Ask
+  el('bid').textContent     = '$' + fmt(d.bid);
+  el('ask').textContent     = '$' + fmt(d.ask);
+  el('bid-qty').textContent = 'qty: ' + fmtK(d.bid_qty);
+  el('ask-qty').textContent = 'qty: ' + fmtK(d.ask_qty);
+
+  // Spread
+  const spread = d.ask - d.bid;
+  const spreadPct = (spread / d.last * 100);
+  el('spread').textContent     = '$' + fmt(spread, 1);
+  el('spread-pct').textContent = spreadPct.toFixed(4) + '% of last';
+
+  // Sparkline
+  priceHistory.push(price);
+  if (priceHistory.length > 60) priceHistory.shift();
+  drawSparkline(priceHistory);
+
+  // Ticker
+  buildTicker(d);
+
+  // Status
+  el('update-count').textContent = `UPDATES: ${updateCount}`;
+  el('last-update').textContent  = `LAST POLL: ${new Date().toLocaleTimeString()}`;
+
+  prevPrice = price;
+}
+
+// ── Poll ─────────────────────────────────────────────────
+
+async function poll() {
+  try {
+    const res  = await fetch(API);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    update(data);
+  } catch(e) {
+    el('last-update').textContent = `ERROR: ${e.message}`;
+  }
+}
+
+// kick off
+poll();
+setInterval(poll, POLL_MS);
+
+// redraw sparkline on resize
+window.addEventListener('resize', () => drawSparkline(priceHistory));
+</script>
+</body>
+</html>
