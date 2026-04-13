@@ -1,0 +1,15 @@
+{
+    "symbol": "BTC/USD", --> par de trading
+    "bid": 70962.3, --> precio de compra
+    "bid_qty": 6.12868128, --> cantidad disponible para comprar al precio de compra
+    "ask": 70962.4, --> precio de venta
+    "ask_qty": 0.10036925, --> cantidad disponible para vender al precio de venta
+    "last": 70962.3, --> precio de la última operación
+    "volume": 1081.6517256, --> volumen total negociado en las últimas 24 horas
+    "vwap": 71140.5, --> precio promedio ponderado por volumen en las últimas 24 horas
+    "low": 70517.7, --> precio más bajo en las últimas 24 horas
+    "high": 71814.9, --> precio más alto en las últimas 24 horas
+    "change": -649.9, --> cambio de precio en las últimas 24 horas
+    "change_pct": -0.91, --> porcentaje de cambio de precio en las últimas 24 horas
+    "timestamp": "2026-04-13T04:15:48.566604Z" --> timestamp del mensaje
+}

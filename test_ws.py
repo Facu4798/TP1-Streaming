@@ -1,12 +1,26 @@
 # Kraken WebSocket (gratuito, sin API key)
 import websocket, json
 
-def on_message(ws, message):
-    data = json.loads(message)
+message_count = 0
+avg_time = 0
+import datetime
+last_message_time = datetime.datetime.now()
 
-    if data.get("channel") == "trade":
-        print(json.dumps(data, indent=4))
-        print("\n\n")
+def on_message(ws, message):
+    global conn
+    data = json.loads(message)   
+    if data.get("channel") == "ticker":
+        try:
+            data = data.get("data")[0]
+            conn.sendall(json.dumps(data).encode('utf-8'))
+        except:
+            pass
+
+    # data = json.loads(message)
+
+    # if data.get("channel") == "ticker":
+    #     print(json.dumps(data, indent=4))
+    #     print("\n\n")
     # if data.get("channel") == "ticker":
 
     #     for item in data.get("data", []):
@@ -16,7 +30,7 @@ def on_open(ws):
     ws.send(json.dumps({
         "method": "subscribe",
         "params": {
-            "channel": "trade",   # <-- trades individuales
+            "channel": "ticker",  
             "symbol": ["BTC/USD"]
         }
     }))
