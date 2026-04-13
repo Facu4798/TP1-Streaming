@@ -1,43 +1,55 @@
-# Kraken WebSocket (gratuito, sin API key)
-import websocket, json
+import os
 
-message_count = 0
-avg_time = 0
-import datetime
-last_message_time = datetime.datetime.now()
 
-def on_message(ws, message):
-    global conn
-    data = json.loads(message)   
-    if data.get("channel") == "ticker":
-        try:
-            data = data.get("data")[0]
-            conn.sendall(json.dumps(data).encode('utf-8'))
-        except:
-            pass
+# Install MySQL server
+os.system("sudo apt-get update -y")
+os.system("sudo apt-get install -y mysql-server")
+os.system("sudo systemctl start mysql")
 
-    # data = json.loads(message)
+# Install Python libraries
+os.system("pip install mysql-connector-python pandas sqlalchemy pymysql")
 
-    # if data.get("channel") == "ticker":
-    #     print(json.dumps(data, indent=4))
-    #     print("\n\n")
-    # if data.get("channel") == "ticker":
 
-    #     for item in data.get("data", []):
-    #         print(f"{item['symbol']}: Ask={item['ask']} | Bid={item['bid']}")
+# Remove --skip-grant-tables from MySQL config if present
+os.system("sudo sed -i 's/^skip-grant-tables//' /etc/mysql/mysql.conf.d/mysqld.cnf")
+os.system("sudo sed -i 's/^skip_grant_tables//' /etc/mysql/mysql.conf.d/mysqld.cnf")
 
-def on_open(ws):
-    ws.send(json.dumps({
-        "method": "subscribe",
-        "params": {
-            "channel": "ticker",  
-            "symbol": ["BTC/USD"]
-        }
-    }))
+# Stop any running instance, then start clean
+os.system("sudo service mysql stop")
+os.system("sudo service mysql start")
 
-ws = websocket.WebSocketApp(
-    "wss://ws.kraken.com/v2",
-    on_message=on_message,
-    on_open=on_open
+# Give MySQL a moment to finish starting
+import time
+import mysql.connector
+time.sleep(3)
+
+# Create DB, user, grant privileges
+sql = """
+CREATE DATABASE IF NOT EXISTS crypto;
+CREATE USER IF NOT EXISTS 'admin_user'@'localhost' IDENTIFIED BY 'StrongPassword123!';
+GRANT ALL PRIVILEGES ON crypto.* TO 'admin_user'@'localhost';
+FLUSH PRIVILEGES;
+"""
+
+with open("/tmp/setup.sql", "w") as f:
+    f.write(sql)
+
+os.system("sudo mysql < /tmp/setup.sql")
+os.system("rm /tmp/setup.sql")
+print("Database and user created.")
+
+# Connect as admin_user
+conn = mysql.connector.connect(
+    host="127.0.0.1",
+    user="admin_user",
+    password="StrongPassword123!",
+    database="crypto"
 )
-ws.run_forever()
+cursor = conn.cursor()
+
+cursor.execute("CREATE TABLE IF NOT EXISTS temp (id INT AUTO_INCREMENT PRIMARY KEY, data JSON)")
+conn.commit()
+print("Table created.")
+
+cursor.close()
+conn.close()
