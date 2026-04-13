@@ -17,7 +17,9 @@ os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-17-openjdk-amd64"
 
 # start spark session
 from pyspark.sql import SparkSession
-spark = SparkSession.builder.appName("Streaming").getOrCreate()
+spark = SparkSession.builder\
+    .appName("Streaming")\
+    .getOrCreate()
 
 
 ######################
@@ -48,10 +50,24 @@ def start_tcp_server():
     # listen for incoming connections
     s.listen(1)
     print("TCP server is listening on port 9999...")
+    print("\n\n")
 
     # accept a connection
     conn, addr = s.accept()
     print(f"Connection from {addr} has been established.")
+    print("\n\n")
+
+    while True:
+        try:
+            data = conn.recv(10000)
+            if data:
+                print(f"Received data: {data.decode('utf-8')}")
+            else:
+                print("No data received. Closing connection.")
+                break
+        except Exception as e:
+            print(f"Error receiving data: {e}")
+            break
 
 # start the websocket connection to binance and stream the data to the tcp server
 def crypto_websocket():
@@ -66,8 +82,8 @@ def crypto_websocket():
             try:
                 data = data.get("data")[0]
                 conn.sendall(json.dumps(data).encode('utf-8'))
-            except:
-                pass
+            except Exception as e:
+                print(f"Error sending data: {e}")
 
     def on_open(ws):
         ws.send(json.dumps({
@@ -98,6 +114,9 @@ tcp_thread.start()
 # start the websocket connection in a separate thread
 websocket_thread = threading.Thread(target=crypto_websocket, daemon=True)
 websocket_thread.start()
+print("TCP server and websocket connection started in separate threads.")
+print("\n\n")
+
 
 # read the data from the tcp server and print it to the console
 query = spark.readStream.format("socket")\
@@ -108,4 +127,9 @@ query = spark.readStream.format("socket")\
 def process_batch(df, epoch_id):
     df.show()
 
-query.writeStream.format("console").foreachBatch(process_batch).start()
+query.writeStream.format("console")\
+    .option("spark.sql.streaming.checkpointLocation", "/tmp/checkpoint")\
+    .foreachBatch(process_batch)\
+    .trigger(processingTime="5 seconds")\
+    .start().awaitTermination()
+
