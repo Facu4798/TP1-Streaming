@@ -13,7 +13,7 @@ os.system("clear")
 os.system("pip install -q pyspark")
 
 # install mysql driver for python
-os.system("pip install -q sqlalchemy pymysql flask flask-cors")
+os.system("pip install -q sqlalchemy pandas pymysql flask flask-cors")
 
 # install jdk 17
 os.system("sudo apt-get update -qq")
@@ -246,7 +246,7 @@ query.writeStream.format("console")\
     .option("spark.sql.streaming.checkpointLocation", "/tmp/checkpoint")\
     .foreachBatch(process_batch)\
     .trigger(processingTime="5 seconds")\
-    .start()
+    .start().awaitTermination()
 
 
 
