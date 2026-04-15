@@ -176,6 +176,43 @@ def get_latest():
     conn.close()
     return jsonify(dict(row) if row else {})
 
+
+@app.route("/api/timeseries")
+def get_timeseries():
+    conn = sqlite3.connect("data.db")
+    df = pd.read_sql_query(
+        "SELECT timestamp, last FROM crypto_data ORDER BY timestamp ASC limit 1000",
+        conn,
+        parse_dates=["timestamp"]
+    )
+    conn.close()
+    df["ma5"] = df["last"].rolling(window=10).mean() # mean of 30 seconds
+    df["ma10"] = df["last"].rolling(window=20).mean() # mean of 1 minutes
+    df["ma30"] = df["last"].rolling(window=60).mean() # mean of 3 minutes
+    df["rsi"] = 100 - (100 / (1 + df["last"].diff().apply(lambda x: max(x, 0)).rolling(window=20).mean() / df["last"].diff().apply(lambda x: max(-x, 0)).rolling(window=20).mean()))
+    df["ema5"] = df["last"].ewm(span=10, adjust=False).mean() # exponential moving average of 5 minutes
+    df["ema10"] = df["last"].ewm(span=20, adjust=False).mean() # exponential moving average of 10 minutes  
+    df["ema30"] = df["last"].ewm(span=60, adjust=False).mean() # exponential moving average of 30 minutes
+
+    if df.empty:
+        return jsonify({})
+
+    # Return strict-JSON-safe values (NaN -> null) for browser parsing.
+    row = df.tail(1).iloc[0].to_dict()
+    clean_row = {}
+    for key, value in row.items():
+        if pd.isna(value):
+            clean_row[key] = None
+        elif isinstance(value, pd.Timestamp):
+            clean_row[key] = value.isoformat()
+        else:
+            clean_row[key] = value
+
+    return jsonify(clean_row)
+
+@app.route("/api/timedashboard")
+def index2():
+    return send_from_directory(".", "main2.html")
 # ── Thread launcher ──────────────────────────────────────
 
 def run_api():

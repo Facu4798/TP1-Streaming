@@ -582,9 +582,9 @@
         <h1>BTC / USD</h1>
         <span>LIVE MARKET DATA</span>
         <div style="font-size: 0.6rem; color: var(--dim); margin-top: 4px;">
-          By <button onclick="window.open('PLACEHOLDER_LINKEDIN_FACUNDO', '_blank')" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;">Facundo Mazzola</button>, 
-          <button onclick="window.open('PLACEHOLDER_LINKEDIN_MATIAS', '_blank')" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;">Matias Adell</button>, 
-          <button onclick="window.open('PLACEHOLDER_LINKEDIN_AGUSTIN', '_blank')" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;">Agustin Giannice</button>
+          By <button onclick="window.open('https://www.linkedin.com/in/facundomazzola', '_blank')" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;">Facundo Mazzola</button>, 
+          <button onclick="window.open('https://www.linkedin.com/in/matiasadell', '_blank')" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;">Matias Adell</button>, 
+          <button onclick="window.open('https://www.linkedin.com/in/agustingiannice', '_blank')" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;">Agustin Giannice</button>
         </div>
       </div>
     </div>
@@ -989,6 +989,37 @@ let priceHistory = [];
 let updateCount  = 0;
 let prevPrice    = null;
 
+function el(id) {
+  return document.getElementById(id);
+}
+
+function fmt(value, digits = 2) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '——';
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function fmtK(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '——';
+  const abs = Math.abs(num);
+  if (abs >= 1e9) return fmt(num / 1e9, 2) + 'B';
+  if (abs >= 1e6) return fmt(num / 1e6, 2) + 'M';
+  if (abs >= 1e3) return fmt(num / 1e3, 2) + 'K';
+  return fmt(num, 2);
+}
+
+function flash(id, className) {
+  const node = el(id);
+  if (!node) return;
+  node.classList.remove('flash-green', 'flash-red');
+  void node.offsetWidth;
+  node.classList.add(className);
+}
+
 // ── Sparkline (pure canvas) ───────────────────────────────
 
 function drawSparkline(prices) {
@@ -1082,6 +1113,11 @@ function buildTicker(d) {
 // ── Main update ───────────────────────────────────────────
 
 function update(d) {
+  if (!d || d.last == null) {
+    el('last-update').textContent = 'WAITING FOR DATA';
+    return;
+  }
+
   updateCount++;
   const price     = d.last;
   const isUp      = prevPrice === null ? true : price >= prevPrice;

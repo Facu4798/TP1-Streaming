@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BTC/USD Indicators Live</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+	:root {
+		--bg: #080b10;
+		--surface: #0d1117;
+		--border: #1a2233;
+		--accent: #f7931a;
+		--accent2: #00e5ff;
+		--green: #00ff88;
+		--red: #ff3366;
+		--muted: #3a4a5c;
+		--text: #c8d8e8;
+		--dim: #546a80;
+		--font-mono: 'Share Tech Mono', monospace;
+		--font-disp: 'Bebas Neue', sans-serif;
+		--font-body: 'Inter', sans-serif;
+	}
+
+	*, *::before, *::after {
+		box-sizing: border-box;
+		margin: 0;
+		padding: 0;
+	}
+
+	body {
+		background: var(--bg);
+		color: var(--text);
+		font-family: var(--font-body);
+		min-height: 100vh;
+		overflow-x: hidden;
+		position: relative;
+	}
+
+	body::before {
+		content: '';
+		position: fixed;
+		inset: 0;
+		background-image:
+			linear-gradient(rgba(20,31,46,0.55) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(20,31,46,0.55) 1px, transparent 1px);
+		background-size: 44px 44px;
+		animation: grid-move 18s linear infinite;
+		pointer-events: none;
+		z-index: 0;
+	}
+
+	@keyframes grid-move {
+		to { background-position: 0 44px; }
+	}
+
+	body::after {
+		content: '';
+		position: fixed;
+		inset: 0;
+		background: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(0,229,255,0.06) 0%, transparent 70%);
+		pointer-events: none;
+		z-index: 0;
+	}
+
+	.wrapper {
+		position: relative;
+		z-index: 1;
+		max-width: 1120px;
+		margin: 0 auto;
+		padding: 32px 24px 60px;
+	}
+
+	header {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		margin-bottom: 34px;
+		border-bottom: 1px solid var(--border);
+		padding-bottom: 20px;
+		gap: 16px;
+	}
+
+	.brand {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+	}
+
+	.btc-icon {
+		width: 44px;
+		height: 44px;
+		background: var(--accent);
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-family: var(--font-disp);
+		font-size: 19px;
+		color: #000;
+		box-shadow: 0 0 24px rgba(247,147,26,0.5);
+		animation: pulse-icon 3s ease-in-out infinite;
+	}
+
+	@keyframes pulse-icon {
+		0%, 100% { box-shadow: 0 0 24px rgba(247,147,26,0.5); }
+		50% { box-shadow: 0 0 40px rgba(247,147,26,0.9); }
+	}
+
+	.brand-text h1 {
+		font-family: var(--font-disp);
+		font-size: 2rem;
+		letter-spacing: 4px;
+		color: #fff;
+		line-height: 1;
+	}
+
+	.brand-text span {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--dim);
+		letter-spacing: 2px;
+	}
+
+	.authors {
+		margin-top: 6px;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.7px;
+		color: var(--dim);
+	}
+
+	.authors button {
+		background: none;
+		border: none;
+		color: var(--accent);
+		cursor: pointer;
+		text-decoration: underline;
+		font-family: inherit;
+		font-size: inherit;
+	}
+
+	.live-badge {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--green);
+		letter-spacing: 2px;
+		text-transform: uppercase;
+	}
+
+	.live-dot {
+		width: 8px;
+		height: 8px;
+		background: var(--green);
+		border-radius: 50%;
+		animation: blink 1.2s ease-in-out infinite;
+		box-shadow: 0 0 8px var(--green);
+	}
+
+	@keyframes blink {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.2; }
+	}
+
+	.hero {
+		display: grid;
+		grid-template-columns: 1.3fr 0.7fr;
+		gap: 16px;
+		margin-bottom: 16px;
+	}
+
+	.card {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		padding: 20px 22px;
+		position: relative;
+		transition: border-color 0.3s;
+	}
+
+	.card:hover {
+		border-color: var(--muted);
+	}
+
+	.hero-main {
+		overflow: hidden;
+	}
+
+	.hero-main::before {
+		content: 'IND';
+		position: absolute;
+		font-family: var(--font-disp);
+		font-size: 12rem;
+		color: rgba(247,147,26,0.035);
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		pointer-events: none;
+		letter-spacing: 6px;
+	}
+
+	.hero-label {
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		letter-spacing: 3px;
+		color: var(--dim);
+		text-transform: uppercase;
+		margin-bottom: 10px;
+	}
+
+	#last {
+		font-family: var(--font-disp);
+		font-size: clamp(3rem, 7vw, 5rem);
+		line-height: 1;
+		letter-spacing: 3px;
+		color: #fff;
+		transition: color 0.35s;
+		position: relative;
+		z-index: 1;
+	}
+
+	#time {
+		margin-top: 12px;
+		font-family: var(--font-mono);
+		color: var(--dim);
+		font-size: 0.72rem;
+		letter-spacing: 1px;
+		position: relative;
+		z-index: 1;
+	}
+
+	#delta {
+		margin-top: 12px;
+		display: inline-block;
+		padding: 6px 14px;
+		border-radius: 2px;
+		font-family: var(--font-mono);
+		font-size: 0.88rem;
+		letter-spacing: 1px;
+		position: relative;
+		z-index: 1;
+	}
+
+	.rsi-wrap .hero-label {
+		margin-bottom: 12px;
+	}
+
+	.rsi-value {
+		font-family: var(--font-disp);
+		font-size: 3.2rem;
+		letter-spacing: 2px;
+		line-height: 1;
+		margin-bottom: 12px;
+	}
+
+	.rsi-bar {
+		width: 100%;
+		height: 10px;
+		border: 1px solid var(--border);
+		background: #071018;
+		position: relative;
+		margin-bottom: 10px;
+		overflow: hidden;
+	}
+
+	.rsi-fill {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 0%;
+		background: linear-gradient(90deg, var(--green), var(--accent), var(--red));
+		transition: width 0.35s;
+	}
+
+	.rsi-zones {
+		display: flex;
+		justify-content: space-between;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		color: var(--dim);
+		letter-spacing: 1px;
+	}
+
+	.rsi-state {
+		margin-top: 10px;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		letter-spacing: 1px;
+	}
+
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 16px;
+		margin-bottom: 16px;
+	}
+
+	.grid-2 {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 16px;
+		margin-bottom: 16px;
+	}
+
+	.kpi .label,
+	.analysis .label {
+		font-family: var(--font-mono);
+		font-size: 0.64rem;
+		letter-spacing: 2.5px;
+		color: var(--dim);
+		text-transform: uppercase;
+		margin-bottom: 10px;
+	}
+
+	.kpi .value,
+	.analysis .value {
+		font-family: var(--font-disp);
+		font-size: 1.9rem;
+		letter-spacing: 1.7px;
+		color: #fff;
+		line-height: 1;
+	}
+
+	.kpi .sub,
+	.analysis .sub {
+		margin-top: 8px;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--dim);
+	}
+
+	.accent-green { border-top: 2px solid var(--green); }
+	.accent-cyan { border-top: 2px solid var(--accent2); }
+	.accent-orange { border-top: 2px solid var(--accent); }
+	.accent-red { border-top: 2px solid var(--red); }
+
+	.chart-card {
+		margin-bottom: 16px;
+	}
+
+	.chart-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 14px;
+	}
+
+	.chart-title {
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		letter-spacing: 3px;
+		color: var(--dim);
+		text-transform: uppercase;
+	}
+
+	.legend {
+		display: flex;
+		gap: 12px;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 1px;
+		color: var(--dim);
+	}
+
+	.legend span {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.sw {
+		width: 14px;
+		height: 3px;
+		display: inline-block;
+	}
+
+	#ts-chart {
+		width: 100%;
+		height: 220px;
+		display: block;
+		border: 1px solid var(--border);
+		background: rgba(8, 11, 16, 0.74);
+		border-radius: 3px;
+	}
+
+	.status-bar {
+		margin-top: 24px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		color: var(--muted);
+		letter-spacing: 1px;
+		border-top: 1px solid var(--border);
+		padding-top: 16px;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+
+	.up { color: var(--green); }
+	.down { color: var(--red); }
+
+	@keyframes flash-green {
+		0%, 100% { background: transparent; }
+		50% { background: rgba(0,255,136,0.08); }
+	}
+
+	@keyframes flash-red {
+		0%, 100% { background: transparent; }
+		50% { background: rgba(255,51,102,0.08); }
+	}
+
+	.flash-green { animation: flash-green 0.55s ease; }
+	.flash-red { animation: flash-red 0.55s ease; }
+
+	@media (max-width: 920px) {
+		.hero {
+			grid-template-columns: 1fr;
+		}
+
+		.grid,
+		.grid-2 {
+			grid-template-columns: 1fr;
+		}
+
+		#ts-chart {
+			height: 190px;
+		}
+	}
+</style>
+</head>
+<body>
+<div class="wrapper">
+	<header>
+		<div class="brand">
+			<div class="btc-icon">BTC</div>
+			<div class="brand-text">
+				<h1>BTC / USD</h1>
+				<span>INDICATORS LIVE DASHBOARD</span>
+				<div class="authors">
+					By
+					<button onclick="window.open('https://www.linkedin.com/in/facundomazzola', '_blank')">Facundo Mazzola</button>,
+					<button onclick="window.open('https://www.linkedin.com/in/matiasadell', '_blank')">Matias Adell</button>,
+					<button onclick="window.open('https://www.linkedin.com/in/agustingiannice', '_blank')">Agustin Giannice</button>
+				</div>
+			</div>
+		</div>
+		<div class="live-badge">
+			<div class="live-dot"></div>
+			timeseries stream
+		</div>
+	</header>
+
+	<section class="hero">
+		<article class="card hero-main" id="hero">
+			<div class="hero-label">Last Close From /api/timeseries</div>
+			<div id="last">------</div>
+			<div id="delta">DELTA: --</div>
+			<div id="time">TIMESTAMP: --</div>
+		</article>
+
+		<article class="card rsi-wrap accent-orange">
+			<div class="hero-label">RSI</div>
+			<div class="rsi-value" id="rsi">--</div>
+			<div class="rsi-bar">
+				<div class="rsi-fill" id="rsi-fill"></div>
+			</div>
+			<div class="rsi-zones">
+				<span>0</span><span>30</span><span>50</span><span>70</span><span>100</span>
+			</div>
+			<div class="rsi-state" id="rsi-state">STATE: --</div>
+		</article>
+	</section>
+
+	<section class="grid">
+		<article class="card kpi accent-green">
+			<div class="label">EMA 5 MIN</div>
+			<div class="value" id="ema5">--</div>
+			<div class="sub" id="ema5-gap">Gap vs Last: --</div>
+		</article>
+		<article class="card kpi accent-green">
+			<div class="label">EMA 10 MIN</div>
+			<div class="value" id="ema10">--</div>
+			<div class="sub" id="ema10-gap">Gap vs Last: --</div>
+		</article>
+		<article class="card kpi accent-green">
+			<div class="label">EMA 30 MIN</div>
+			<div class="value" id="ema30">--</div>
+			<div class="sub" id="ema30-gap">Gap vs Last: --</div>
+		</article>
+	</section>
+
+	<section class="grid-2">
+		<article class="card analysis accent-orange">
+			<div class="label">Trend Alignment</div>
+			<div class="value" id="trend">--</div>
+			<div class="sub" id="trend-sub">Waiting for valid MA/EMA values</div>
+		</article>
+
+		<article class="card analysis accent-red">
+			<div class="label">Signal</div>
+			<div class="value" id="signal">--</div>
+			<div class="sub" id="signal-sub">Based on RSI + MA/EMA spread</div>
+		</article>
+	</section>
+
+	<section class="card chart-card">
+		<div class="chart-header">
+			<span class="chart-title">Rolling Indicator Snapshot (latest 120 polls)</span>
+			<div class="legend">
+				<span><i class="sw" style="background:#f7931a;"></i>LAST</span>
+				<span><i class="sw" style="background:#00e5ff;"></i>MA5</span>
+				<span><i class="sw" style="background:#00ff88;"></i>MA10</span>
+				<span><i class="sw" style="background:#ff3366;"></i>MA30</span>
+			</div>
+		</div>
+		<canvas id="ts-chart"></canvas>
+	</section>
+
+	<div class="status-bar">
+		<span>API SOURCE: /api/timeseries</span>
+		<span id="status-count">UPDATES: 0</span>
+		<span id="status-last">LAST POLL: --</span>
+		<span id="status-health">HEALTH: WAITING</span>
+	</div>
+</div>
+
+<script>
+const API = '/api/timeseries';
+const POLL_MS = 2000;
+const MAX_POINTS = 120;
+
+let updates = 0;
+let prevLast = null;
+const history = {
+	last: [],
+	ma5: [],
+	ma10: [],
+	ma30: []
+};
+
+function id(x) {
+	return document.getElementById(x);
+}
+
+function n(v) {
+	const x = Number(v);
+	return Number.isFinite(x) ? x : null;
+}
+
+function f(v, d = 2) {
+	const x = Number(v);
+	if (!Number.isFinite(x)) return '--';
+	return x.toLocaleString('en-US', {
+		minimumFractionDigits: d,
+		maximumFractionDigits: d
+	});
+}
+
+function price(v) {
+	return '$' + f(v, 2);
+}
+
+function pct(v) {
+	const x = Number(v);
+	if (!Number.isFinite(x)) return '--';
+	return f(x, 2) + '%';
+}
+
+function setGap(targetId, base, ref) {
+	const b = n(base);
+	const r = n(ref);
+	if (b === null || r === null) {
+		id(targetId).textContent = 'Gap vs Last: --';
+		return;
+	}
+	const g = r - b;
+	const sign = g >= 0 ? '+' : '';
+	id(targetId).textContent = 'Gap vs Last: ' + sign + f(g, 2);
+	id(targetId).className = 'sub ' + (g >= 0 ? 'up' : 'down');
+}
+
+function flash(targetId, cls) {
+	const node = id(targetId);
+	node.classList.remove('flash-green', 'flash-red');
+	void node.offsetWidth;
+	node.classList.add(cls);
+}
+
+function updateHistory(data) {
+	const pairs = [
+		['last', data.last],
+		['ma5', data.ma5],
+		['ma10', data.ma10],
+		['ma30', data.ma30]
+	];
+
+	pairs.forEach(([k, v]) => {
+		history[k].push(n(v));
+		if (history[k].length > MAX_POINTS) history[k].shift();
+	});
+}
+
+function chartSeries(ctx, w, h, series, color, min, max) {
+	const valid = series
+		.map((v, i) => (v === null ? null : { x: i, y: v }))
+		.filter(Boolean);
+	if (valid.length < 2) return;
+
+	const pad = { t: 12, r: 12, b: 20, l: 12 };
+	const iW = w - pad.l - pad.r;
+	const iH = h - pad.t - pad.b;
+	const range = max - min || 1;
+
+	function xOf(i) {
+		return pad.l + (i / Math.max(series.length - 1, 1)) * iW;
+	}
+
+	function yOf(v) {
+		return pad.t + iH - ((v - min) / range) * iH;
+	}
+
+	ctx.beginPath();
+	ctx.moveTo(xOf(valid[0].x), yOf(valid[0].y));
+	for (let i = 1; i < valid.length; i++) {
+		ctx.lineTo(xOf(valid[i].x), yOf(valid[i].y));
+	}
+	ctx.strokeStyle = color;
+	ctx.lineWidth = 1.7;
+	ctx.lineJoin = 'round';
+	ctx.lineCap = 'round';
+	ctx.stroke();
+}
+
+function drawChart() {
+	const canvas = id('ts-chart');
+	const ctx = canvas.getContext('2d');
+	const dpr = window.devicePixelRatio || 1;
+	const w = canvas.clientWidth;
+	const h = canvas.clientHeight;
+
+	canvas.width = w * dpr;
+	canvas.height = h * dpr;
+	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+	ctx.clearRect(0, 0, w, h);
+
+	const values = [...history.last, ...history.ma5, ...history.ma10, ...history.ma30].filter(v => v !== null);
+	if (values.length < 2) return;
+
+	const min = Math.min(...values);
+	const max = Math.max(...values);
+
+	ctx.strokeStyle = 'rgba(84,106,128,0.25)';
+	ctx.lineWidth = 1;
+	for (let i = 1; i <= 4; i++) {
+		const y = (h / 5) * i;
+		ctx.beginPath();
+		ctx.moveTo(0, y);
+		ctx.lineTo(w, y);
+		ctx.stroke();
+	}
+
+	chartSeries(ctx, w, h, history.last, '#f7931a', min, max);
+	chartSeries(ctx, w, h, history.ma5, '#00e5ff', min, max);
+	chartSeries(ctx, w, h, history.ma10, '#00ff88', min, max);
+	chartSeries(ctx, w, h, history.ma30, '#ff3366', min, max);
+
+	ctx.fillStyle = 'rgba(84,106,128,0.8)';
+	ctx.font = '10px Share Tech Mono';
+	ctx.textAlign = 'left';
+	ctx.fillText(f(min), 8, h - 6);
+	ctx.textAlign = 'right';
+	ctx.fillText(f(max), w - 8, h - 6);
+}
+
+function rsiState(v) {
+	if (!Number.isFinite(v)) return { text: 'STATE: NO DATA', cls: '' };
+	if (v >= 70) return { text: 'STATE: OVERBOUGHT', cls: 'down' };
+	if (v <= 30) return { text: 'STATE: OVERSOLD', cls: 'up' };
+	return { text: 'STATE: NEUTRAL', cls: '' };
+}
+
+function detectTrend(last, ma5, ma10, ema5, ema10) {
+	const values = [last, ma5, ma10, ema5, ema10].map(n);
+	if (values.some(v => v === null)) {
+		return { title: '--', sub: 'Waiting for valid MA/EMA values', up: null };
+	}
+
+	const bullish = last > ma5 && ma5 > ma10 && ema5 > ema10;
+	const bearish = last < ma5 && ma5 < ma10 && ema5 < ema10;
+
+	if (bullish) {
+		return { title: 'BULLISH STACK', sub: 'Last > MA5 > MA10 and EMA5 > EMA10', up: true };
+	}
+
+	if (bearish) {
+		return { title: 'BEARISH STACK', sub: 'Last < MA5 < MA10 and EMA5 < EMA10', up: false };
+	}
+
+	return { title: 'MIXED', sub: 'Indicators are crossing or diverging', up: null };
+}
+
+function detectSignal(last, ma5, ema5, rsi) {
+	const l = n(last);
+	const m = n(ma5);
+	const e = n(ema5);
+	const r = n(rsi);
+
+	if ([l, m, e, r].some(v => v === null)) {
+		return { title: '--', sub: 'Signal unavailable (insufficient data)', cls: '' };
+	}
+
+	if (l > m && l > e && r < 35) {
+		return { title: 'BUY BIAS', sub: 'Price above trend while RSI is low', cls: 'up' };
+	}
+
+	if (l < m && l < e && r > 65) {
+		return { title: 'SELL BIAS', sub: 'Price below trend while RSI is high', cls: 'down' };
+	}
+
+	return { title: 'HOLD', sub: 'No strong directional confluence', cls: '' };
+}
+
+function apply(data) {
+	const last = n(data.last);
+	if (last === null) {
+		id('status-health').textContent = 'HEALTH: INVALID PAYLOAD';
+		id('status-health').className = 'down';
+		return;
+	}
+
+	updates += 1;
+
+	id('last').textContent = price(last);
+	const upMove = prevLast === null ? true : last >= prevLast;
+	id('last').style.color = upMove ? 'var(--green)' : 'var(--red)';
+	flash('hero', upMove ? 'flash-green' : 'flash-red');
+
+	if (prevLast === null) {
+		id('delta').textContent = 'DELTA: --';
+		id('delta').style.background = 'rgba(84,106,128,0.14)';
+		id('delta').style.color = 'var(--dim)';
+	} else {
+		const d = last - prevLast;
+		const p = (d / prevLast) * 100;
+		const sign = d >= 0 ? '+' : '';
+		id('delta').textContent = 'DELTA: ' + sign + f(d, 2) + ' (' + sign + pct(p) + ')';
+		id('delta').style.background = d >= 0 ? 'rgba(0,255,136,0.10)' : 'rgba(255,51,102,0.10)';
+		id('delta').style.color = d >= 0 ? 'var(--green)' : 'var(--red)';
+	}
+
+	id('time').textContent = 'TIMESTAMP: ' + (data.timestamp ? new Date(data.timestamp).toUTCString() : '--');
+
+	['ema5', 'ema10', 'ema30'].forEach(k => {
+		id(k).textContent = price(data[k]);
+	});
+
+	setGap('ema5-gap', data.ema5, data.last);
+	setGap('ema10-gap', data.ema10, data.last);
+	setGap('ema30-gap', data.ema30, data.last);
+
+	const rsi = n(data.rsi);
+	id('rsi').textContent = rsi === null ? '--' : f(rsi, 2);
+	id('rsi-fill').style.width = (rsi === null ? 0 : Math.max(0, Math.min(100, rsi))) + '%';
+
+	const rs = rsiState(rsi);
+	id('rsi-state').textContent = rs.text;
+	id('rsi-state').className = 'rsi-state ' + rs.cls;
+
+	const trend = detectTrend(data.last, data.ma5, data.ma10, data.ema5, data.ema10);
+	id('trend').textContent = trend.title;
+	id('trend-sub').textContent = trend.sub;
+	id('trend').className = 'value ' + (trend.up === true ? 'up' : trend.up === false ? 'down' : '');
+
+	const signal = detectSignal(data.last, data.ma5, data.ema5, data.rsi);
+	id('signal').textContent = signal.title;
+	id('signal-sub').textContent = signal.sub;
+	id('signal').className = 'value ' + signal.cls;
+
+	updateHistory(data);
+	drawChart();
+
+	id('status-count').textContent = 'UPDATES: ' + updates;
+	id('status-last').textContent = 'LAST POLL: ' + new Date().toLocaleTimeString();
+	id('status-health').textContent = 'HEALTH: LIVE';
+	id('status-health').className = 'up';
+
+	prevLast = last;
+}
+
+async function poll() {
+	try {
+		const res = await fetch(API, { cache: 'no-store' });
+		if (!res.ok) {
+			throw new Error('HTTP ' + res.status);
+		}
+		const data = await res.json();
+		apply(data || {});
+	} catch (err) {
+		id('status-last').textContent = 'LAST POLL: FAILED';
+		id('status-health').textContent = 'HEALTH: ' + err.message;
+		id('status-health').className = 'down';
+	}
+}
+
+poll();
+setInterval(poll, POLL_MS);
+window.addEventListener('resize', drawChart);
+</script>
+</body>
+</html>
