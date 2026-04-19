@@ -6,16 +6,17 @@
 ##### setup #####
 #################
 
+from datetime import datetime
 import os
 import time
 os.system("clear")
-# install pyspark
-os.system("pip install -q pyspark")
 
-# install mysql driver for python
-os.system("pip install -q sqlalchemy pandas pymysql flask flask-cors")
+# install libraries
+print("Installing libraries...")
+os.system("pip install -q sqlalchemy pandas pymysql flask flask-cors pyspark")
 
 # install jdk 17
+print("Installing JDK 17...")
 os.system("sudo apt-get update -qq")
 os.system("sudo apt-get install openjdk-17-jdk-headless -qq")
 os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-17-openjdk-amd64"
@@ -23,9 +24,10 @@ os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-17-openjdk-amd64"
 
 
 # start spark session
+print("Starting Spark session...")
 from pyspark.sql import functions as sf
 from pyspark.sql import types as st
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Window
 spark = SparkSession.builder\
     .appName("Streaming")\
     .getOrCreate()
@@ -39,17 +41,9 @@ import queue
 import socket
 import json
 import pandas as pd
-import sqlite3
-
-# initiate the sqlite database and delete the data if exists
-connection = sqlite3.connect("data.db")
-cursor = connection.cursor()
-cursor.execute("DROP TABLE IF EXISTS crypto_data;")
-connection.commit()
-cursor.close()
-connection.close()
 
 
+print("hasta aca")
 
 ######################
 ##### TCP Server #####
@@ -121,11 +115,6 @@ def crypto_websocket():
 
 
 
-
-
-
-
-
 # start the tcp server in a separate thread
 tcp_thread = threading.Thread(target=start_tcp_server, daemon=True)
 tcp_thread.start()
@@ -143,86 +132,7 @@ print("\n\n")
 ##### Start API #####
 #####################
 
-import sqlite3
-import threading
-from flask import Flask, jsonify, send_from_directory
-
-app = Flask(__name__)
-
-
-# ── Routes ──────────────────────────────────────────────
-@app.route("/")
-def index():
-    return send_from_directory(".", "main.html")
-
-
-@app.route("/api/data")
-def get_data():
-    conn = sqlite3.connect("data.db")
-    conn.row_factory = sqlite3.Row  # makes rows behave like dicts
-    rows = conn.execute(
-        "SELECT * FROM crypto_data ORDER BY timestamp DESC LIMIT 100"
-    ).fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in rows])
-
-@app.route("/api/latest")
-def get_latest():
-    conn = sqlite3.connect("data.db")
-    conn.row_factory = sqlite3.Row
-    row = conn.execute(
-        "SELECT * FROM crypto_data ORDER BY timestamp DESC LIMIT 1"
-    ).fetchone()
-    conn.close()
-    return jsonify(dict(row) if row else {})
-
-
-@app.route("/api/timeseries")
-def get_timeseries():
-    conn = sqlite3.connect("data.db")
-    df = pd.read_sql_query(
-        "SELECT timestamp, last FROM crypto_data ORDER BY timestamp ASC limit 1000",
-        conn,
-        parse_dates=["timestamp"]
-    )
-    conn.close()
-    df["ma5"] = df["last"].rolling(window=10).mean() # mean of 30 seconds
-    df["ma10"] = df["last"].rolling(window=20).mean() # mean of 1 minutes
-    df["ma30"] = df["last"].rolling(window=60).mean() # mean of 3 minutes
-    df["rsi"] = 100 - (100 / (1 + df["last"].diff().apply(lambda x: max(x, 0)).rolling(window=20).mean() / df["last"].diff().apply(lambda x: max(-x, 0)).rolling(window=20).mean()))
-    df["ema5"] = df["last"].ewm(span=10, adjust=False).mean() # exponential moving average of 5 minutes
-    df["ema10"] = df["last"].ewm(span=20, adjust=False).mean() # exponential moving average of 10 minutes  
-    df["ema30"] = df["last"].ewm(span=60, adjust=False).mean() # exponential moving average of 30 minutes
-
-    if df.empty:
-        return jsonify({})
-
-    # Return strict-JSON-safe values (NaN -> null) for browser parsing.
-    row = df.tail(1).iloc[0].to_dict()
-    clean_row = {}
-    for key, value in row.items():
-        if pd.isna(value):
-            clean_row[key] = None
-        elif isinstance(value, pd.Timestamp):
-            clean_row[key] = value.isoformat()
-        else:
-            clean_row[key] = value
-
-    return jsonify(clean_row)
-
-@app.route("/api/timedashboard")
-def index2():
-    return send_from_directory(".", "main2.html")
-# ── Thread launcher ──────────────────────────────────────
-
-def run_api():
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
-
-def start_api_thread():
-    t = threading.Thread(target=run_api, daemon=True)
-    t.start()
-    print("API running on http://localhost:5000")
-
+from api import start_api_thread
 start_api_thread()
 
 
@@ -232,50 +142,112 @@ start_api_thread()
 
 
 # read the data from the tcp server and print it to the console
+
+w_order = Window().orderBy("timestamp_seconds")
+w30s = Window().orderBy("timestamp_seconds").rangeBetween(-30, 0)
+w1m = Window().orderBy("timestamp_seconds").rangeBetween(-60, 0)
+w3m = Window().orderBy("timestamp_seconds").rangeBetween(-120, 0)
+
 query = spark.readStream.format("socket")\
     .option("host", "localhost")\
     .option("port", 9999)\
-    .load()
+    .load()\
+    .withColumn(
+        "json",
+        sf.from_json(
+            "value", 
+            st.StructType([
+                st.StructField("symbol", st.StringType()),
+                st.StructField("bid", st.DoubleType()),
+                st.StructField("bid_qty", st.DoubleType()),
+                st.StructField("ask", st.DoubleType()),
+                st.StructField("ask_qty", st.DoubleType()),
+                st.StructField("last", st.DoubleType()),
+                st.StructField("volume", st.DoubleType()),
+                st.StructField("vwap", st.DoubleType()),
+                st.StructField("low", st.DoubleType()),
+                st.StructField("high", st.DoubleType()),
+                st.StructField("change", st.DoubleType()),
+                st.StructField("change_pct", st.DoubleType()),
+                st.StructField("timestamp", st.TimestampType())
+            ])
+        )
+    ).select(
+        "json.*"
+    ).withColumn(
+        "timestamp_seconds",
+        sf.col("timestamp").cast("long")
+    ).withWatermark(
+        "timestamp", 
+        "2 minutes"
+    ).withColumn(
+        "delta_last",
+        sf.col("last") - sf.lag("last").over(w_order)
+    ).withColumn(
+        "gain",
+        sf.when(sf.col("delta_last") > 0, sf.col("delta_last")).otherwise(sf.lit(0.0))
+    ).withColumn(
+        "loss",
+        sf.when(sf.col("delta_last") < 0, -sf.col("delta_last")).otherwise(sf.lit(0.0))
+    ).withColumn(
+        "ma30s",
+        sf.avg("last").over(w30s)
+    ).withColumn(
+        "ma1m",
+        sf.avg("last").over(w1m)
+    ).withColumn(
+        "ma3m",
+        sf.avg("last").over(w3m)
+    ).withColumn(
+        "avg_gain_1m",
+        sf.avg("gain").over(w1m)
+    ).withColumn(
+        "avg_loss_1m",
+        sf.avg("loss").over(w1m)
+    ).withColumn(
+        "rsi1m",
+        sf.when(
+            sf.col("avg_loss_1m") == 0,
+            sf.lit(100.0)
+        ).otherwise(
+            sf.lit(100.0) - (sf.lit(100.0) / (sf.lit(1.0) + (sf.col("avg_gain_1m") / sf.col("avg_loss_1m"))))
+        )
+    ).select(
+        "symbol",
+        "bid",
+        "bid_qty",
+        "ask",
+        "ask_qty",
+        "last",
+        "volume",
+        "vwap",
+        "low",
+        "high",
+        "change",
+        "change_pct",
+        "timestamp",
+        "ma30s",
+        "ma1m",
+        "ma3m",
+        "rsi1m"
+    )    
 
 
 
 def process_batch(df, epoch_id):
-    df = df.withColumn("json", sf.from_json("value", st.StructType([
-        st.StructField("symbol", st.StringType()),
-        st.StructField("bid", st.DoubleType()),
-        st.StructField("bid_qty", st.DoubleType()),
-        st.StructField("ask", st.DoubleType()),
-        st.StructField("ask_qty", st.DoubleType()),
-        st.StructField("last", st.DoubleType()),
-        st.StructField("volume", st.DoubleType()),
-        st.StructField("vwap", st.DoubleType()),
-        st.StructField("low", st.DoubleType()),
-        st.StructField("high", st.DoubleType()),
-        st.StructField("change", st.DoubleType()),
-        st.StructField("change_pct", st.DoubleType()),
-        st.StructField("timestamp", st.StringType())
-    ]))).select("json.*")
+    data = df.collect()[-1].asDict()
 
-    # # write the batch to a csv file
-    # df.toPandas().to_csv(
-    #     "data.csv",
-    #     index=False,
-    #     mode="a",
-    #     header=not os.path.exists("data.csv")
-    # )
+    # parse dates
+    for k,v in data.items():
+        if isinstance(v, datetime):
+            data[k] = v.strftime("%Y-%m-%d %H:%M:%S")
 
-    # print(f"Written batch {epoch_id} to CSV file.")
 
-    # write to sqlite
-    conn = sqlite3.connect("data.db")
-    df.toPandas().to_sql(
-        "crypto_data",
-        conn,
-        if_exists="append",
-        index=False
+    import requests
+    requests.post(
+        "http://localhost:5000/api/data", 
+        json=data
     )
-    conn.close()
-    print(f"Written batch {epoch_id} to SQLite database.")
     
     
 
